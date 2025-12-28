@@ -41,7 +41,7 @@
         import { 
             Download, Plus, Copy, Trash2, X, User, Image as ImageIcon, 
             ChevronLeft, ChevronRight, RefreshCw, Video, Maximize2, 
-            Clipboard, FileText, ExternalLink, Zap, Check, AlertCircle
+            Clipboard, FileText, ExternalLink, Zap, Check, AlertCircle, UploadCloud, Link as LinkIcon
         } from 'lucide-react';
 
         // --- Lightbox ---
@@ -65,7 +65,19 @@
         const TweetCard = ({ tweet, onRemove, onOpenLightbox }) => {
             const [currentIndex, setCurrentIndex] = useState(0);
             const [isCopying, setIsCopying] = useState(false);
+            const [isCatboxCopying, setIsCatboxCopying] = useState(false);
+            const [isUploading, setIsUploading] = useState(false);
+            const [catboxUrl, setCatboxUrl] = useState(null);
+            const [uploadProgress, setUploadProgress] = useState(0); // 0 = start, 1 = downloading, 2 = uploading
+            
             const currentMedia = tweet.media[currentIndex];
+
+            // Reset upload state when slide changes
+            useEffect(() => {
+                setIsUploading(false);
+                setCatboxUrl(null);
+                setUploadProgress(0);
+            }, [currentIndex]);
 
             const nextSlide = (e) => { e.stopPropagation(); setCurrentIndex((prev) => (prev === tweet.media.length - 1 ? 0 : prev + 1)); };
             const prevSlide = (e) => { e.stopPropagation(); setCurrentIndex((prev) => (prev === 0 ? tweet.media.length - 1 : prev - 1)); };
@@ -86,14 +98,72 @@
                 } catch (e) { window.open(item.url, '_blank'); }
             };
 
+            // دالة الرفع المعدلة بناءً على الكود الناجح
+            const uploadToCatbox = async (e) => {
+                e.stopPropagation();
+                if (isUploading || catboxUrl) return;
+
+                setIsUploading(true);
+                setUploadProgress(1); // مرحلة تحميل الملف محلياً
+                
+                try {
+                    // 1. تحميل الفيديو كـ Blob محلياً أولاً (مثلما يفعل كود Nuke)
+                    const fileResponse = await fetch(currentMedia.url);
+                    if (!fileResponse.ok) throw new Error('فشل تحميل الملف الأصلي');
+                    const blob = await fileResponse.blob();
+
+                    setUploadProgress(2); // مرحلة الرفع
+
+                    // 2. تجهيز البيانات للرفع (fileupload وليس urlupload)
+                    const formData = new FormData();
+                    formData.append('reqtype', 'fileupload');
+                    
+                    // إنشاء اسم ملف عشوائي لتفادي المشاكل
+                    const filename = `x_deck_${tweet.id}_${Date.now()}.mp4`;
+                    const file = new File([blob], filename, { type: 'video/mp4' });
+                    formData.append('fileToUpload', file);
+
+                    // 3. الإرسال عبر البروكسي الذي يعمل
+                    const proxyUrl = 'https://corsproxy.io/?';
+                    const targetUrl = 'https://catbox.moe/user/api.php';
+                    
+                    const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) throw new Error('فشل الاتصال بـ Catbox');
+                    
+                    const resultUrl = await response.text();
+                    
+                    if (resultUrl && resultUrl.startsWith('http')) {
+                        setCatboxUrl(resultUrl);
+                    } else {
+                        throw new Error('لم يتم إرجاع رابط صحيح: ' + resultUrl);
+                    }
+
+                } catch (err) {
+                    console.error(err);
+                    alert(`فشل الرفع: ${err.message}\nحاول مرة أخرى.`);
+                } finally {
+                    setIsUploading(false);
+                    setUploadProgress(0);
+                }
+            };
+
             const copyText = (textToCopy, type = 'link') => {
+                if (!textToCopy) return;
+                
                 const textArea = document.createElement("textarea");
                 textArea.value = textToCopy;
                 textArea.style.position = "fixed"; textArea.style.left = "-9999px";
                 document.body.appendChild(textArea); textArea.focus(); textArea.select();
                 document.execCommand('copy'); document.body.removeChild(textArea);
+                
                 if (type === 'link') {
                     setIsCopying(true); setTimeout(() => setIsCopying(false), 1500);
+                } else if (type === 'catbox') {
+                    setIsCatboxCopying(true); setTimeout(() => setIsCatboxCopying(false), 1500);
                 } else {
                     const btn = document.getElementById(`text-copy-${tweet.id}`);
                     if(btn) { btn.style.color = '#4ade80'; setTimeout(() => btn.style.color = '', 500); }
@@ -102,6 +172,7 @@
 
             return (
                 <div className="bg-[#111111] border border-[#222] rounded-3xl overflow-hidden shadow-2xl hover:border-gray-700 transition-all duration-300 group relative flex flex-col h-full">
+                    {/* Header */}
                     <div className="p-4 flex items-center justify-between bg-[#161616] border-b border-[#222]">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full p-[1px] bg-gray-700 overflow-hidden">
@@ -115,6 +186,7 @@
                         <button onClick={() => onRemove(tweet.id)} className="text-gray-600 hover:text-red-500 p-2 rounded-full hover:bg-red-500/10"><Trash2 size={18} /></button>
                     </div>
 
+                    {/* Media Viewer */}
                     <div className="relative aspect-[4/3] bg-black cursor-zoom-in overflow-hidden border-b border-[#222]" onClick={() => onOpenLightbox(currentMedia)}>
                         <div className="w-full h-full flex items-center justify-center bg-black">
                             {currentMedia.type === 'video' ? (
@@ -137,12 +209,67 @@
                         </div>
                     </div>
 
+                    {/* Tweet Text */}
                     {tweet.text && <div className="px-5 py-4 bg-[#111] text-right border-b border-[#222] flex-1"><p className="text-sm text-gray-300 leading-7 whitespace-pre-wrap" dir="auto">{tweet.text}</p></div>}
 
-                    <div className="p-3 bg-[#161616] mt-auto grid grid-cols-[1fr_1fr_auto] gap-2">
-                        <button onClick={downloadCurrent} className="bg-[#222] hover:bg-[#333] text-gray-200 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all border border-[#333]"><Download size={14} /> <span className="hidden sm:inline">تحميل</span></button>
-                        <button onClick={() => copyText(currentMedia.url, 'link')} className={`${isCopying ? 'bg-green-900/20 text-green-400 border-green-900/50' : 'bg-[#222] text-gray-400 hover:bg-[#333] border-[#333]'} border py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all`}>{isCopying ? <Check size={14} /> : <Copy size={14} />} <span className="hidden sm:inline">{isCopying ? 'تم النسخ' : 'رابط'}</span></button>
-                        <button id={`text-copy-${tweet.id}`} onClick={() => copyText(tweet.text, 'text')} className="bg-[#222] text-gray-500 hover:text-white hover:bg-[#333] border border-[#333] w-10 rounded-xl flex items-center justify-center transition-all" title="نسخ النص"><FileText size={14} /></button>
+                    {/* Action Footer */}
+                    <div className="p-3 bg-[#161616] mt-auto flex flex-wrap gap-2 items-center">
+                        {/* Download Button */}
+                        <button onClick={downloadCurrent} className="flex-1 bg-[#222] hover:bg-[#333] text-gray-200 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all border border-[#333] min-w-[80px]">
+                            <Download size={14} /> <span className="hidden sm:inline">تحميل</span>
+                        </button>
+
+                        {/* Catbox Upload / Result Area */}
+                        {currentMedia.type === 'video' ? (
+                            catboxUrl ? (
+                                <div className="flex-[2] flex items-center gap-2 bg-[#1a1a1a] border border-blue-900/50 rounded-xl p-1 animate-[fadeIn_0.3s_ease-out]">
+                                    <div className="bg-blue-900/20 p-1.5 rounded-lg text-blue-400">
+                                        <LinkIcon size={14} />
+                                    </div>
+                                    <input 
+                                        type="text" 
+                                        value={catboxUrl} 
+                                        readOnly 
+                                        className="bg-transparent text-blue-100 text-[10px] sm:text-xs px-1 w-full outline-none font-mono dir-ltr text-left truncate"
+                                        onClick={(e) => e.target.select()}
+                                    />
+                                    <button 
+                                        onClick={() => copyText(catboxUrl, 'catbox')}
+                                        className={`p-1.5 rounded-lg transition-all flex-shrink-0 ${isCatboxCopying ? 'bg-green-500 text-white' : 'bg-[#333] text-gray-400 hover:text-white'}`}
+                                        title="نسخ الرابط"
+                                    >
+                                        {isCatboxCopying ? <Check size={14} /> : <Copy size={14} />}
+                                    </button>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={uploadToCatbox} 
+                                    disabled={isUploading}
+                                    className="flex-1 bg-[#222] hover:bg-[#333] text-gray-200 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all border border-[#333] min-w-[100px]"
+                                >
+                                    {isUploading ? (
+                                        <RefreshCw size={14} className="animate-spin" />
+                                    ) : (
+                                        <UploadCloud size={14} />
+                                    )}
+                                    <span>
+                                        {isUploading 
+                                            ? (uploadProgress === 1 ? 'جاري التحضير...' : 'جاري الرفع...') 
+                                            : 'رفع Catbox'}
+                                    </span>
+                                </button>
+                            )
+                        ) : null}
+
+                        {/* Copy Link Button */}
+                        <button onClick={() => copyText(currentMedia.url, 'link')} className={`${isCopying ? 'bg-green-900/20 text-green-400 border-green-900/50' : 'bg-[#222] text-gray-400 hover:bg-[#333] border-[#333]'} flex-1 border py-2.5 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all min-w-[80px]`}>
+                            {isCopying ? <Check size={14} /> : <Copy size={14} />} <span className="hidden sm:inline">{isCopying ? 'منسوخ' : 'رابط'}</span>
+                        </button>
+
+                        {/* Copy Text Button */}
+                        <button id={`text-copy-${tweet.id}`} onClick={() => copyText(tweet.text, 'text')} className="bg-[#222] text-gray-500 hover:text-white hover:bg-[#333] border border-[#333] w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0" title="نسخ النص">
+                            <FileText size={14} />
+                        </button>
                     </div>
                 </div>
             );
@@ -163,10 +290,8 @@
 
             useEffect(() => { localStorage.setItem('x-media-deck-data', JSON.stringify(tweets)); }, [tweets]);
 
-            // دالة استخراج المعرف (تم تحسينها لتقبل الروابط الناقصة)
             const extractTweetId = (urlInput) => {
                 try {
-                    // إذا لم يكن الرابط يحتوي على بروتوكول، نضيفه لكي يعمل new URL
                     let safeUrl = urlInput.trim();
                     if (!safeUrl.startsWith('http')) {
                         safeUrl = `https://${safeUrl}`;
@@ -208,8 +333,6 @@
             const handleAddLink = async () => {
                 setIsProcessing(true);
                 
-                // Regex محسن جداً لاكتشاف الروابط حتى بدون https
-                // يبحث عن أي شيء يشبه twitter.com/user/status/id أو x.com/user/status/id
                 const regex = /((https?:\/\/)?(www\.)?(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+)/g;
                 const rawMatches = input.match(regex) || [];
                 
@@ -229,11 +352,6 @@
                         if (tweetData) newTweets.push(tweetData);
                     }
                 }
-                
-                if (newTweets.length === 0 && uniqueUrls.length > 0 && rawMatches.length > 0) {
-                     // إذا وجدنا روابط لكن لم ننجح في الجلب (ربما مكررة أو فشل API)
-                     // لا نظهر خطأ إذا كانت مكررة، لكن جيد أن يعرف المستخدم
-                }
 
                 setTweets(prev => [...newTweets, ...prev]);
                 setInput('');
@@ -250,7 +368,7 @@
                     <header className="w-full max-w-5xl flex justify-between items-center mb-10 z-10">
                         <div className="flex items-center gap-4">
                             <div className="bg-[#111] border border-[#333] text-white p-3 rounded-2xl shadow-xl"><X size={24} strokeWidth={3} /></div>
-                            <div><h1 className="text-2xl font-bold text-white">منصة الوسائط</h1><p className="text-xs text-gray-600">Dark Mode Fixed</p></div>
+                            <div><h1 className="text-2xl font-bold text-white">منصة الوسائط</h1><p className="text-xs text-gray-600">Catbox Fixed (Binary Upload)</p></div>
                         </div>
                         {tweets.length > 0 && <button onClick={clearAll} className="bg-[#111] border border-[#333] text-gray-400 hover:text-red-400 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Trash2 size={14} /> تنظيف</button>}
                     </header>
