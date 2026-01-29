@@ -68,7 +68,7 @@
             const [isCatboxCopying, setIsCatboxCopying] = useState(false);
             const [isUploading, setIsUploading] = useState(false);
             const [catboxUrl, setCatboxUrl] = useState(null);
-            const [uploadProgress, setUploadProgress] = useState(0); // 0 = start, 1 = downloading, 2 = uploading
+            const [uploadProgress, setUploadProgress] = useState(0); // 0=idle, 1=downloading, 2=uploading
             
             const currentMedia = tweet.media[currentIndex];
 
@@ -98,7 +98,7 @@
                 } catch (e) { window.open(item.url, '_blank'); }
             };
 
-            // دالة الرفع المعدلة بناءً على الكود الناجح
+            // --- دالة الرفع المحسنة ---
             const uploadToCatbox = async (e) => {
                 e.stopPropagation();
                 if (isUploading || catboxUrl) return;
@@ -107,44 +107,66 @@
                 setUploadProgress(1); // مرحلة تحميل الملف محلياً
                 
                 try {
-                    // 1. تحميل الفيديو كـ Blob محلياً أولاً (مثلما يفعل كود Nuke)
+                    // 1. تحميل الفيديو كـ Blob محلياً أولاً
                     const fileResponse = await fetch(currentMedia.url);
                     if (!fileResponse.ok) throw new Error('فشل تحميل الملف الأصلي');
                     const blob = await fileResponse.blob();
 
                     setUploadProgress(2); // مرحلة الرفع
 
-                    // 2. تجهيز البيانات للرفع (fileupload وليس urlupload)
+                    // 2. تجهيز البيانات
                     const formData = new FormData();
                     formData.append('reqtype', 'fileupload');
-                    
-                    // إنشاء اسم ملف عشوائي لتفادي المشاكل
                     const filename = `x_deck_${tweet.id}_${Date.now()}.mp4`;
                     const file = new File([blob], filename, { type: 'video/mp4' });
                     formData.append('fileToUpload', file);
 
-                    // 3. الإرسال عبر البروكسي الذي يعمل
-                    const proxyUrl = 'https://corsproxy.io/?';
+                    // 3. محاولة الرفع عبر عدة وسطاء (Proxies) لتفادي الحظر
                     const targetUrl = 'https://catbox.moe/user/api.php';
                     
-                    const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
-                        method: 'POST',
-                        body: formData
-                    });
+                    // قائمة الوسطاء - اذا فشل الاول يجرب الثاني
+                    const proxies = [
+                        // الوسيط الأول: ThingProxy (يعمل جيداً مع POST)
+                        { url: (target) => `https://thingproxy.freeboard.io/fetch/${target}` },
+                        // الوسيط الثاني: CorsProxy (القديم - كاحتياط)
+                        { url: (target) => `https://corsproxy.io/?${encodeURIComponent(target)}` }
+                    ];
 
-                    if (!response.ok) throw new Error('فشل الاتصال بـ Catbox');
-                    
-                    const resultUrl = await response.text();
-                    
-                    if (resultUrl && resultUrl.startsWith('http')) {
+                    let resultUrl = null;
+                    let lastError = null;
+
+                    for (const proxy of proxies) {
+                        try {
+                            const proxyUrl = proxy.url(targetUrl);
+                            console.log("Trying proxy:", proxyUrl); // Debugging
+
+                            const response = await fetch(proxyUrl, {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            if (response.ok) {
+                                const text = await response.text();
+                                if (text && text.startsWith('http')) {
+                                    resultUrl = text;
+                                    break; // نجح الرفع، نخرج من الحلقة
+                                }
+                            }
+                        } catch (err) {
+                            console.warn("Proxy failed, trying next...", err);
+                            lastError = err;
+                        }
+                    }
+
+                    if (resultUrl) {
                         setCatboxUrl(resultUrl);
                     } else {
-                        throw new Error('لم يتم إرجاع رابط صحيح: ' + resultUrl);
+                        throw new Error('فشل الرفع عبر جميع الوسطاء. قد يكون خادم Catbox محظوراً مؤقتاً.');
                     }
 
                 } catch (err) {
                     console.error(err);
-                    alert(`فشل الرفع: ${err.message}\nحاول مرة أخرى.`);
+                    alert(`فشل الرفع: ${err.message}\nجرب مرة أخرى لاحقاً.`);
                 } finally {
                     setIsUploading(false);
                     setUploadProgress(0);
@@ -368,7 +390,7 @@
                     <header className="w-full max-w-5xl flex justify-between items-center mb-10 z-10">
                         <div className="flex items-center gap-4">
                             <div className="bg-[#111] border border-[#333] text-white p-3 rounded-2xl shadow-xl"><X size={24} strokeWidth={3} /></div>
-                            <div><h1 className="text-2xl font-bold text-white">منصة الوسائط</h1><p className="text-xs text-gray-600">Catbox Fixed (Binary Upload)</p></div>
+                            <div><h1 className="text-2xl font-bold text-white">منصة الوسائط</h1><p className="text-xs text-gray-600">Catbox Fixed (Proxy Rotation)</p></div>
                         </div>
                         {tweets.length > 0 && <button onClick={clearAll} className="bg-[#111] border border-[#333] text-gray-400 hover:text-red-400 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Trash2 size={14} /> تنظيف</button>}
                     </header>
