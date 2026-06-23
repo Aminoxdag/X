@@ -3,30 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- هذا السطر هو الحل السحري لتشغيل الفيديوهات -->
+    <!-- هذا السطر هو الحل لتشغيل فيديوهات تويتر مباشرة دون حظر -->
     <meta name="referrer" content="no-referrer">
     <title>منصة الوسائط | X Media Deck</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- React & Lucide -->
-    <script type="importmap">
-    {
-        "imports": {
-            "react": "https://esm.sh/react@18.2.0",
-            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "lucide-react": "https://esm.sh/lucide-react@0.263.1"
-        }
-    }
-    </script>
+    <!-- React & ReactDOM (UMD Production Versions from cdnjs) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
 
-    <!-- Babel -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Babel Standalone Translator (Stable cdnjs Version) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.3/babel.min.js" crossorigin></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;700&display=swap');
-        body { background-color: #050505; color: #e5e7eb; font-family: 'IBM Plex Sans Arabic', sans-serif; }
+        body { 
+            background-color: #050505; 
+            color: #e5e7eb; 
+            font-family: 'IBM Plex Sans Arabic', sans-serif; 
+        }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #050505; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
@@ -37,23 +34,151 @@
 
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useRef } from 'react';
-        import { createRoot } from 'react-dom/client';
-        import { 
-            Download, Plus, Copy, Trash2, X, User, Image as ImageIcon, 
-            ChevronLeft, ChevronRight, RefreshCw, Video, Maximize2, 
-            Clipboard, FileText, ExternalLink, Zap, Check, AlertCircle, UploadCloud, Link as LinkIcon
-        } from 'lucide-react';
+    <!-- تم إضافة data-presets="react" لإجبار بابل على معالجة JSX فقط دون توليد أو إبقاء أي عبارات استيراد حديثة تسبب أخطاء المتصفح -->
+    <script type="text/babel" data-presets="react">
+        // استخراج الخصائص المطلوبة من المتغيرات العالمية المسجلة في المتصفح تلقائياً
+        const { useState, useEffect, useRef } = window.React;
+        const { createRoot } = window.ReactDOM;
+        
+        // تعريف الأيقونات يدوياً كـ React SVG Components مستقلة لمنع أخطاء المكتبة الخارجية والـ forwardRef تماماً
+        const Download = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+        );
 
-        // --- قائمة البروكسي (وسطاء) ---
-        // نستخدم عدة وسطاء لتجاوز حظر CORS عند التنزيل والرفع
+        const Plus = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+        );
+
+        const Copy = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+        );
+
+        const Trash2 = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+        );
+
+        const X = ({ size = 24, strokeWidth = "2", className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        );
+
+        const User = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+            </svg>
+        );
+
+        const ChevronLeft = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="15 18 9 12 15 6"/>
+            </svg>
+        );
+
+        const ChevronRight = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        );
+
+        const RefreshCw = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+        );
+
+        const Video = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            </svg>
+        );
+
+        const Clipboard = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            </svg>
+        );
+
+        const FileText = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+            </svg>
+        );
+
+        const ExternalLink = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+        );
+
+        const Zap = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+        );
+
+        const Check = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="20 6 9 17 4 12"/>
+            </svg>
+        );
+
+        const UploadCloud = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                <polyline points="16 16 12 12 8 16"/>
+                <line x1="12" y1="12" x2="12" y2="21"/>
+            </svg>
+        );
+
+        const LinkIcon = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+        );
+
+        const ImageIcon = ({ size = 24, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+            </svg>
+        );
+
+        // --- قائمة البروكسي (وسطاء) لتجاوز CORS ---
         const CORS_PROXIES = [
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
         ];
 
-        // دالة مساعدة لجلب الملف عبر البروكسي
         const fetchBlobWithProxy = async (url) => {
             let lastError;
             for (const proxyFunc of CORS_PROXIES) {
@@ -67,7 +192,6 @@
                     lastError = e;
                 }
             }
-            // المحاولة الأخيرة مباشرة (قد تنجح في بعض المتصفحات)
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('Direct fetch failed');
@@ -77,24 +201,26 @@
             }
         };
 
-        // --- Lightbox ---
+        // --- Lightbox Component ---
         const Lightbox = ({ media, onClose }) => {
             if (!media) return null;
             return (
                 <div className="fixed inset-0 z-50 bg-black/98 backdrop-blur-xl flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
-                    <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all"><X size={32} /></button>
+                    <button onClick={onClose} className="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all">
+                        <X size={32} />
+                    </button>
                     <div className="w-full max-w-5xl h-full max-h-[90vh] flex items-center justify-center">
                         {media.type === 'video' ? (
-                        <video src={media.url} controls autoPlay className="max-w-full max-h-full rounded-lg shadow-2xl border border-gray-800" />
+                            <video src={media.url} controls autoPlay className="max-w-full max-h-full rounded-lg shadow-2xl border border-gray-800" />
                         ) : (
-                        <img src={media.url} alt="Full view" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-gray-800" />
+                            <img src={media.url} alt="Full view" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-gray-800" />
                         )}
                     </div>
                 </div>
             );
         };
 
-        // --- Tweet Card ---
+        // --- Tweet Card Component ---
         const TweetCard = ({ tweet, onRemove, onOpenLightbox }) => {
             const [currentIndex, setCurrentIndex] = useState(0);
             const [isCopying, setIsCopying] = useState(false);
@@ -102,7 +228,7 @@
             const [isUploading, setIsUploading] = useState(false);
             const [catboxUrl, setCatboxUrl] = useState(null);
             const [uploadProgress, setUploadProgress] = useState(0); 
-            const [isDownloading, setIsDownloading] = useState(false); // حالة التنزيل
+            const [isDownloading, setIsDownloading] = useState(false);
             
             const currentMedia = tweet.media[currentIndex];
 
@@ -113,10 +239,16 @@
                 setIsDownloading(false);
             }, [currentIndex]);
 
-            const nextSlide = (e) => { e.stopPropagation(); setCurrentIndex((prev) => (prev === tweet.media.length - 1 ? 0 : prev + 1)); };
-            const prevSlide = (e) => { e.stopPropagation(); setCurrentIndex((prev) => (prev === 0 ? tweet.media.length - 1 : prev - 1)); };
+            const nextSlide = (e) => { 
+                e.stopPropagation(); 
+                setCurrentIndex((prev) => (prev === tweet.media.length - 1 ? 0 : prev + 1)); 
+            };
+            
+            const prevSlide = (e) => { 
+                e.stopPropagation(); 
+                setCurrentIndex((prev) => (prev === 0 ? tweet.media.length - 1 : prev - 1)); 
+            };
 
-            // --- دالة التنزيل المحسنة ---
             const downloadCurrent = async (e) => {
                 e.stopPropagation();
                 if (isDownloading) return;
@@ -126,7 +258,6 @@
                 const filename = `${tweet.handle}_${tweet.id}_${currentIndex}.${item.type === 'video' ? 'mp4' : 'jpg'}`;
                 
                 try {
-                    // نستخدم البروكسي لجلب الملف كـ Blob لتجاوز CORS
                     const blob = await fetchBlobWithProxy(item.url);
                     const url = window.URL.createObjectURL(blob);
                     
@@ -139,47 +270,36 @@
                     window.URL.revokeObjectURL(url);
                 } catch (e) { 
                     console.error("Download failed, opening fallback:", e);
-                    // الخطة البديلة: فتح في نافذة جديدة
                     window.open(item.url, '_blank'); 
                 } finally {
                     setIsDownloading(false);
                 }
             };
 
-            // --- دالة الرفع إلى Catbox ---
             const uploadToCatbox = async (e) => {
                 e.stopPropagation();
                 if (isUploading || catboxUrl) return;
 
                 setIsUploading(true);
-                setUploadProgress(1); // 1. جاري جلب الملف الأصلي
+                setUploadProgress(1); 
                 
                 try {
-                    // 1. تحميل الملف الأصلي باستخدام البروكسي (لتجاوز حظر تويتر)
                     const blob = await fetchBlobWithProxy(currentMedia.url);
-                    
-                    setUploadProgress(2); // 2. جاري الرفع إلى Catbox
+                    setUploadProgress(2); 
 
-                    // 2. تجهيز البيانات
                     const formData = new FormData();
                     formData.append('reqtype', 'fileupload');
                     const filename = `x_deck_${tweet.id}_${Date.now()}.mp4`;
                     const file = new File([blob], filename, { type: 'video/mp4' });
                     formData.append('fileToUpload', file);
 
-                    // 3. الرفع باستخدام وسيط يدعم POST (ThingProxy أو غيره)
                     const targetUrl = 'https://catbox.moe/user/api.php';
-                    
-                    // قائمة بروكسي مخصصة للرفع (POST Requests)
                     const postProxies = [
-                        // هذا البروكسي يدعم رفع الملفات بشكل جيد
                         { url: (target) => `https://thingproxy.freeboard.io/fetch/${target}` },
-                        // احتياطي آخر
                         { url: (target) => `https://corsproxy.io/?${encodeURIComponent(target)}` } 
                     ];
 
                     let resultUrl = null;
-                    let lastError = null;
 
                     for (const proxy of postProxies) {
                         try {
@@ -198,7 +318,6 @@
                             }
                         } catch (err) {
                             console.warn("Upload proxy failed:", err);
-                            lastError = err;
                         }
                     }
 
@@ -222,17 +341,26 @@
                 
                 const textArea = document.createElement("textarea");
                 textArea.value = textToCopy;
-                textArea.style.position = "fixed"; textArea.style.left = "-9999px";
-                document.body.appendChild(textArea); textArea.focus(); textArea.select();
-                document.execCommand('copy'); document.body.removeChild(textArea);
+                textArea.style.position = "fixed"; 
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea); 
+                textArea.focus(); 
+                textArea.select();
+                document.execCommand('copy'); 
+                document.body.removeChild(textArea);
                 
                 if (type === 'link') {
-                    setIsCopying(true); setTimeout(() => setIsCopying(false), 1500);
+                    setIsCopying(true); 
+                    setTimeout(() => setIsCopying(false), 1500);
                 } else if (type === 'catbox') {
-                    setIsCatboxCopying(true); setTimeout(() => setIsCatboxCopying(false), 1500);
+                    setIsCatboxCopying(true); 
+                    setTimeout(() => setIsCatboxCopying(false), 1500);
                 } else {
                     const btn = document.getElementById(`text-copy-${tweet.id}`);
-                    if(btn) { btn.style.color = '#4ade80'; setTimeout(() => btn.style.color = '', 500); }
+                    if (btn) { 
+                        btn.style.color = '#4ade80'; 
+                        setTimeout(() => btn.style.color = '', 500); 
+                    }
                 }
             };
 
@@ -249,34 +377,41 @@
                                 <span className="text-xs text-gray-500 font-mono">@{tweet.handle}</span>
                             </div>
                         </div>
-                        <button onClick={() => onRemove(tweet.id)} className="text-gray-600 hover:text-red-500 p-2 rounded-full hover:bg-red-500/10"><Trash2 size={18} /></button>
+                        <button onClick={() => onRemove(tweet.id)} className="text-gray-600 hover:text-red-500 p-2 rounded-full hover:bg-red-500/10">
+                            <Trash2 size={18} />
+                        </button>
                     </div>
 
                     {/* Media Viewer */}
                     <div className="relative aspect-[4/3] bg-black cursor-zoom-in overflow-hidden border-b border-[#222]" onClick={() => onOpenLightbox(currentMedia)}>
                         <div className="w-full h-full flex items-center justify-center bg-black">
                             {currentMedia.type === 'video' ? (
-                            <video 
-                                src={currentMedia.url} 
-                                className="w-full h-full object-contain" 
-                                poster={currentMedia.thumb} 
-                                controls 
-                                onClick={(e) => e.stopPropagation()} 
-                                // هذا يمنع إرسال Referrer داخل عنصر الفيديو نفسه كإجراء احترازي إضافي
-                                referrerPolicy="no-referrer"
-                            />
+                                <video 
+                                    src={currentMedia.url} 
+                                    className="w-full h-full object-contain" 
+                                    poster={currentMedia.thumb} 
+                                    controls 
+                                    onClick={(e) => e.stopPropagation()} 
+                                    referrerPolicy="no-referrer"
+                                />
                             ) : (
-                            <img src={currentMedia.url} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                                <img src={currentMedia.url} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                             )}
                         </div>
                         {tweet.media.length > 1 && (
-                        <>
-                            <button onClick={prevSlide} className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all"><ChevronLeft size={20} /></button>
-                            <button onClick={nextSlide} className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all"><ChevronRight size={20} /></button>
-                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/5">
-                            {tweet.media.map((_, idx) => (<div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentIndex ? 'bg-white w-6' : 'bg-white/30 w-1.5'}`} />))}
-                            </div>
-                        </>
+                            <>
+                                <button onClick={prevSlide} className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all">
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <button onClick={nextSlide} className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all">
+                                    <ChevronRight size={20} />
+                                </button>
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/5">
+                                    {tweet.media.map((_, idx) => (
+                                        <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentIndex ? 'bg-white w-6' : 'bg-white/30 w-1.5'}`} />
+                                    ))}
+                                </div>
+                            </>
                         )}
                         <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1 border border-white/10 text-gray-200">
                             {currentMedia.type === 'video' ? <Video size={10} /> : <ImageIcon size={10} />} <span>{currentIndex + 1}/{tweet.media.length}</span>
@@ -284,7 +419,11 @@
                     </div>
 
                     {/* Tweet Text */}
-                    {tweet.text && <div className="px-5 py-4 bg-[#111] text-right border-b border-[#222] flex-1"><p className="text-sm text-gray-300 leading-7 whitespace-pre-wrap" dir="auto">{tweet.text}</p></div>}
+                    {tweet.text && (
+                        <div className="px-5 py-4 bg-[#111] text-right border-b border-[#222] flex-1">
+                            <p className="text-sm text-gray-300 leading-7 whitespace-pre-wrap" dir="auto">{tweet.text}</p>
+                        </div>
+                    )}
 
                     {/* Action Footer */}
                     <div className="p-3 bg-[#161616] mt-auto flex flex-wrap gap-2 items-center">
@@ -350,7 +489,7 @@
             );
         };
 
-        // --- APP ---
+        // --- Main App Component ---
         const App = () => {
             const [input, setInput] = useState('');
             const [tweets, setTweets] = useState([]);
@@ -360,10 +499,18 @@
 
             useEffect(() => {
                 const saved = localStorage.getItem('x-media-deck-data');
-                if (saved) { try { setTweets(JSON.parse(saved)); } catch (e) {} }
+                if (saved) { 
+                    try { 
+                        setTweets(JSON.parse(saved)); 
+                    } catch (e) {
+                        console.error("Failed to parse saved data", e);
+                    } 
+                }
             }, []);
 
-            useEffect(() => { localStorage.setItem('x-media-deck-data', JSON.stringify(tweets)); }, [tweets]);
+            useEffect(() => { 
+                localStorage.setItem('x-media-deck-data', JSON.stringify(tweets)); 
+            }, [tweets]);
 
             const extractTweetId = (urlInput) => {
                 try {
@@ -379,7 +526,9 @@
                         if (statusIndex !== -1 && pathSegments[statusIndex + 1]) return pathSegments[statusIndex + 1];
                     }
                     return null;
-                } catch (e) { return null; }
+                } catch (e) { 
+                    return null; 
+                }
             };
 
             const fetchTweetData = async (id) => {
@@ -388,24 +537,44 @@
                     if (!response.ok) throw new Error('Network error');
                     const data = await response.json();
                     const mediaList = [];
-                    if (data?.tweet?.media?.videos) data.tweet.media.videos.forEach(v => mediaList.push({ type: 'video', url: v.url, thumb: v.thumbnail_url }));
+                    
+                    if (data?.tweet?.media?.videos) {
+                        data.tweet.media.videos.forEach(v => mediaList.push({ type: 'video', url: v.url, thumb: v.thumbnail_url }));
+                    }
+                    
                     if (data?.tweet?.media?.photos) {
                         const hasVideo = mediaList.some(m => m.type === 'video');
-                        if (!hasVideo || mediaList.length === 0) data.tweet.media.photos.forEach(p => mediaList.push({ type: 'image', url: p.url, thumb: p.url }));
+                        if (!hasVideo || mediaList.length === 0) {
+                            data.tweet.media.photos.forEach(p => mediaList.push({ type: 'image', url: p.url, thumb: p.url }));
+                        }
                     }
+                    
                     if (mediaList.length === 0) return null;
                     return {
-                        id: id, text: data.tweet.text, author: data.tweet.author.name, handle: data.tweet.author.screen_name,
-                        avatar: data.tweet.author.avatar_url, media: mediaList, timestamp: Date.now()
+                        id: id, 
+                        text: data.tweet.text, 
+                        author: data.tweet.author.name, 
+                        handle: data.tweet.author.screen_name,
+                        avatar: data.tweet.author.avatar_url, 
+                        media: mediaList, 
+                        timestamp: Date.now()
                     };
-                } catch (error) { return null; }
+                } catch (error) { 
+                    return null; 
+                }
             };
 
             const handlePaste = async () => {
-                try { const text = await navigator.clipboard.readText(); setInput(text); } catch (err) { alert("الصق الرابط يدوياً"); }
+                try { 
+                    const text = await navigator.clipboard.readText(); 
+                    setInput(text); 
+                } catch (err) { 
+                    alert("الصق الرابط يدوياً"); 
+                }
             };
 
             const handleAddLink = async () => {
+                if (!input.trim()) return;
                 setIsProcessing(true);
                 
                 const regex = /((https?:\/\/)?(www\.)?(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+)/g;
@@ -434,7 +603,9 @@
             };
 
             const removeTweet = (id) => setTweets(prev => prev.filter(t => t.id !== id));
-            const clearAll = () => { if(window.confirm("هل أنت متأكد؟")) setTweets([]); };
+            const clearAll = () => { 
+                if (window.confirm("هل أنت متأكد من حذف جميع العناصر؟")) setTweets([]); 
+            };
 
             return (
                 <div className="min-h-screen flex flex-col items-center p-4 sm:p-8 overflow-x-hidden">
@@ -442,36 +613,68 @@
 
                     <header className="w-full max-w-5xl flex justify-between items-center mb-10 z-10">
                         <div className="flex items-center gap-4">
-                            <div className="bg-[#111] border border-[#333] text-white p-3 rounded-2xl shadow-xl"><X size={24} strokeWidth={3} /></div>
-                            <div><h1 className="text-2xl font-bold text-white">منصة الوسائط</h1><p className="text-xs text-gray-600">Catbox & Download Fixed</p></div>
+                            <div className="bg-[#111] border border-[#333] text-white p-3 rounded-2xl shadow-xl">
+                                <X size={24} strokeWidth={3} />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-white">منصة الوسائط</h1>
+                                <p className="text-xs text-gray-600">تم إصلاح مشكلة التشغيل والمزامنة</p>
+                            </div>
                         </div>
-                        {tweets.length > 0 && <button onClick={clearAll} className="bg-[#111] border border-[#333] text-gray-400 hover:text-red-400 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Trash2 size={14} /> تنظيف</button>}
+                        {tweets.length > 0 && (
+                            <button onClick={clearAll} className="bg-[#111] border border-[#333] text-gray-400 hover:text-red-400 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
+                                <Trash2 size={14} /> تنظيف الكل
+                            </button>
+                        )}
                     </header>
 
                     <main className="w-full max-w-5xl space-y-8 z-10">
                         <div className="bg-[#111] border border-[#333] rounded-3xl p-2 pl-3 flex gap-2 shadow-lg">
-                            <button onClick={handlePaste} className="sm:hidden bg-[#222] text-gray-300 p-3 rounded-xl hover:bg-[#333]"><Clipboard size={20} /></button>
+                            <button onClick={handlePaste} className="sm:hidden bg-[#222] text-gray-300 p-3 rounded-xl hover:bg-[#333]">
+                                <Clipboard size={20} />
+                            </button>
                             <input 
-                                ref={inputRef} type="text" value={input} onChange={(e) => setInput(e.target.value)} 
+                                ref={inputRef} 
+                                type="text" 
+                                value={input} 
+                                onChange={(e) => setInput(e.target.value)} 
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddLink()} 
                                 placeholder="الصق رابط التغريدة هنا (x.com/...)" 
                                 className="flex-1 bg-transparent border-none text-gray-200 px-3 py-3 focus:ring-0 placeholder-gray-700 text-sm font-medium dir-rtl text-right outline-none truncate" 
                             />
-                            <button onClick={handleAddLink} disabled={isProcessing || !input.trim()} className={`px-6 rounded-2xl font-bold text-sm flex items-center gap-2 transition-all ${isProcessing ? 'bg-[#222] text-gray-500' : 'bg-white text-black hover:bg-gray-200'}`}>
-                                {isProcessing ? <RefreshCw className="animate-spin" size={20} /> : <Plus size={20} />} <span className="hidden sm:inline">إضافة</span>
+                            <button 
+                                onClick={handleAddLink} 
+                                disabled={isProcessing || !input.trim()} 
+                                className={`px-6 rounded-2xl font-bold text-sm flex items-center gap-2 transition-all ${isProcessing ? 'bg-[#222] text-gray-500' : 'bg-white text-black hover:bg-gray-200'}`}
+                            >
+                                {isProcessing ? <RefreshCw className="animate-spin" size={20} /> : <Plus size={20} />} 
+                                <span className="hidden sm:inline">إضافة</span>
                             </button>
                         </div>
 
-                        {tweets.length > 0 && <div className="flex justify-between px-4 text-xs text-gray-600"><span>البطاقات: {tweets.length}</span><span className="flex gap-1"><Zap size={12} /> تلقائي</span></div>}
+                        {tweets.length > 0 && (
+                            <div className="flex justify-between px-4 text-xs text-gray-600">
+                                <span>البطاقات المضافة: {tweets.length}</span>
+                                <span className="flex items-center gap-1"><Zap size={12} /> تحديث تلقائي</span>
+                            </div>
+                        )}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-                            {tweets.map((tweet) => <TweetCard key={tweet.id} tweet={tweet} onRemove={removeTweet} onOpenLightbox={setLightboxMedia} />)}
+                            {tweets.map((tweet) => (
+                                <TweetCard 
+                                    key={tweet.id} 
+                                    tweet={tweet} 
+                                    onRemove={removeTweet} 
+                                    onOpenLightbox={setLightboxMedia} 
+                                />
+                            ))}
                         </div>
 
                         {tweets.length === 0 && !isProcessing && (
                             <div className="text-center py-24 opacity-30 flex flex-col items-center">
                                 <ExternalLink size={40} className="text-gray-500 mb-4" />
-                                <h3 className="text-xl font-bold text-gray-300">لا توجد بطاقات</h3>
+                                <h3 className="text-xl font-bold text-gray-300">لا توجد بطاقات معروضة حالياً</h3>
+                                <p className="text-xs text-gray-500 mt-2">يرجى نسخ رابط التغريدة وإضافته بالأعلى</p>
                             </div>
                         )}
                     </main>
